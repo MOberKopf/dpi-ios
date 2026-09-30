@@ -37,7 +37,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             BUILD_DIR="$PWD/build"
 
-          # Build Network Extension target without code signing (may fail independently - don't stop)
+          # Build Network Extension target without code signing (must succeed - VPN won't work without it)
           xcodebuild -project ByeDPI-iOS.xcodeproj \
             -target ByeDPI-Packet-Tunnel \
             -configuration Release \
@@ -46,7 +46,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            BUILD_DIR="$PWD/build" || true
+            BUILD_DIR="$PWD/build"
 
           echo "=== build tree ==="
           find build -maxdepth 3 -print || true
@@ -69,8 +69,16 @@ jobs:
             rm -rf "$APP/PlugIns/$(basename "$APPEX")"
             cp -R "$APPEX" "$APP/PlugIns/"
             echo "Embedded appex into PlugIns"
+            echo "=== APPEX contents (must contain binary, not only Info.plist) ==="
+            find "$APP/PlugIns" -type f -exec ls -lh {} \;
+            APPEX_BIN=$(find "$APP/PlugIns" -maxdepth 2 -type f ! -name "*.plist" | head -n1)
+            if [ -z "$APPEX_BIN" ]; then
+              echo "ERROR: appex contains no binary, only Info.plist. Extension build is broken."
+              exit 1
+            fi
           else
-            echo "WARNING: .appex not found, IPA will contain only .app"
+            echo "ERROR: .appex not found, IPA would contain only .app without VPN extension"
+            exit 1
           fi
 
           rm -rf Payload ByeDPI-iOS-unsigned.ipa

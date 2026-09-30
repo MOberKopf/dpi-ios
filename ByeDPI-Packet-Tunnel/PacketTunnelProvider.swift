@@ -6,13 +6,13 @@
 //
 
 import NetworkExtension
+import Network
 import Foundation
 
 class PacketTunnelProvider: NEPacketTunnelProvider {
     
     private var networkMonitor: NWPathMonitor?
-    private var packetFlow: NEPacketTunnelFlow?
-    
+
     override func startTunnel(options: [String : NSObject]?, completionHandler: @escaping (Error?) -> Void) {
         // Configure the tunnel
         let tunnelNetworkSettings = createTunnelSettings()
@@ -24,7 +24,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
                 return
             }
             
-            self.packetFlow = self.packetFlow
             self.startPacketProcessing()
             completionHandler(nil)
             
@@ -77,8 +76,6 @@ class PacketTunnelProvider: NEPacketTunnelProvider {
     }
     
     private func startPacketProcessing() {
-        guard let packetFlow = packetFlow else { return }
-        
         readPackets(packetFlow)
     }
     
