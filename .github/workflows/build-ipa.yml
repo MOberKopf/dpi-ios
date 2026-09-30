@@ -13,6 +13,8 @@ on:
 jobs:
   build-unsigned-ipa:
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -76,6 +78,11 @@ jobs:
           cp -R "$APP" Payload/
           /usr/bin/zip -r ByeDPI-iOS-unsigned.ipa Payload
           ls -lh *.ipa
+          echo "=== IPA contents ==="
+          unzip -l ByeDPI-iOS-unsigned.ipa || true
+          echo "=== APP contents ==="
+          find Payload -print || true
+          du -sh build/Release-iphoneos/*.app build/Release-iphoneos/*.appex 2>&1 || true
 
       - name: Upload unsigned IPA
         uses: actions/upload-artifact@v4
@@ -83,3 +90,16 @@ jobs:
           name: ByeDPI-iOS-unsigned-ipa
           path: ByeDPI-iOS-unsigned.ipa
           if-no-files-found: error
+
+      - name: Publish to GitHub Release (latest-unsigned)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-unsigned
+          name: Latest unsigned IPA (sideload)
+          body: |
+            Unsigned .ipa для сайдлоада (Sideloadly / AltStore / SideStore / TrollStore).
+            Собрано из коммита ${{ github.sha }}.
+            Без подписи: перед установкой подпишите своим Apple ID.
+          files: ByeDPI-iOS-unsigned.ipa
+          draft: false
+          prerelease: false
