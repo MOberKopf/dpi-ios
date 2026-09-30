@@ -1,0 +1,85 @@
+name: Build IPA (unsigned)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["master"]
+    paths:
+      - "ByeDPI-iOS/**"
+      - "ByeDPI-Packet-Tunnel/**"
+      - "ByeDPI-iOS.xcodeproj/**"
+      - ".github/workflows/build-ipa.yml"
+
+jobs:
+  build-unsigned-ipa:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Build app (unsigned, for sideload)
+        run: |
+          set -ex
+          # Build main app target without code signing
+          xcodebuild -project ByeDPI-iOS.xcodeproj \
+            -target ByeDPI-iOS \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            BUILD_DIR="$PWD/build"
+
+          # Build Network Extension target without code signing (may fail independently - don't stop)
+          xcodebuild -project ByeDPI-iOS.xcodeproj \
+            -target ByeDPI-Packet-Tunnel \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            BUILD_DIR="$PWD/build" || true
+
+          echo "=== build tree ==="
+          find build -maxdepth 3 -print || true
+          ls -R build/Release-iphoneos || true
+
+          APP=$(find build/Release-iphoneos -maxdepth 1 -name "*.app" | head -n1)
+          APPEX=$(find build/Release-iphoneos -maxdepth 1 -name "*.appex" | head -n1)
+          echo "APP=$APP"
+          echo "APPEX=$APPEX"
+
+          if [ -z "$APP" ]; then
+            echo "ERROR: .app not found"
+            exit 1
+          fi
+
+          # Project.pbxproj currently has no Embed App Extensions phase,
+          # so embed .appex manually if it was built
+          if [ -n "$APPEX" ]; then
+            mkdir -p "$APP/PlugIns"
+            rm -rf "$APP/PlugIns/$(basename "$APPEX")"
+            cp -R "$APPEX" "$APP/PlugIns/"
+            echo "Embedded appex into PlugIns"
+          else
+            echo "WARNING: .appex not found, IPA will contain only .app"
+          fi
+
+          rm -rf Payload ByeDPI-iOS-unsigned.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          /usr/bin/zip -r ByeDPI-iOS-unsigned.ipa Payload
+          ls -lh *.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ByeDPI-iOS-unsigned-ipa
+          path: ByeDPI-iOS-unsigned.ipa
+          if-no-files-found: error
